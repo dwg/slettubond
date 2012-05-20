@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="is">
+	<head>
+		<meta charset=utf-8>
+		<title>Sléttubönd</title>
+		<!--[if lt IE 9]>
+		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+		<![endif]-->
+		<script>
+			(function() {
+				function $(id) {
+					return document.getElementById(id);
+				}
+				
+				function observe(element, event, handler) {
+					if (element.addEventListener) {
+		        element.addEventListener(event, handler, false);
+		      } else {
+		        element.attachEvent("on" + event, handler);
+					}
+				}
+				
+				function stopObserving(element, event, handler) {
+					if (element.removeEventListener) {
+		        element.removeEventListener(event, handler, false);
+		      } else {
+		        element.detachEvent('on' + event, handler);
+					}
+				}
+				
+				function canStore() {
+					try {
+						return ('JSON' in window && window['JSON'] !== null) && ('localStorage' in window && window['localStorage'] !== null);
+					} catch(e) {
+						return false;
+					}
+				}
+				
+				function stopBubble(event) {
+					event = event || window.event;
+
+					if (event.preventDefault) {
+						event.preventDefault();
+					} else {
+						event.returnValue = false;
+					}
+					if (event.stopPropagation) {
+						event.stopPropagation();
+					} else {
+						event.cancelBubble = true;
+					}
+				}
+				
+				function initLocalStore() {
+					if (!localStorage['slettubond']) {
+						localStorage['slettubond'] = JSON.stringify([]);
+					}
+					storageChanged();
+				}
+				
+				function storageChanged() {
+					var list, entries, html, i;
+					
+					list = lastChild($('stored'));
+					entries = JSON.parse(localStorage['slettubond']);
+					if (entries.length > 0) {
+						$('stored').style.display = '';
+						html = '';
+					} else {
+						$('stored').style.display = 'none';
+						html = '<li>Engin bönd komin ennþá</li>';
+					}
+					for (i = 0; i < entries.length; i++) {
+						html += '<li id="entry-' + i + '"><div><button>Henda</button></div><p>';
+						html += entries[i].forward.replace(/[\n]/g, '<br/>') + '</p><p>';
+						html += entries[i].reverse.replace(/[\n]/g, '<br/>') + '</p></li>';
+					}
+					
+					list.innerHTML = html;
+				}
+				
+				function store(event) {
+					var entries, entry;
+					
+					entry = {
+						forward: $('input').value,
+						reverse: $('output').value
+					};
+					entries = JSON.parse(localStorage['slettubond']);
+					entries.push(entry);
+					localStorage['slettubond'] = JSON.stringify(entries);
+					storageChanged();
+					
+					stopBubble(event);
+				}
+				
+				function handleRemove(event) {
+					event = event || window.event;
+					
+					var node = event.target, type = event.type, currentTarget = event.currentTarget,
+							idx, entries, sliced;
+
+			    if (currentTarget && currentTarget.tagName) {
+			      if (type === 'load' || type === 'error')
+			            node = currentTarget;
+			    }
+
+			    if (node.nodeType == 3)
+			      node = node.parentNode;
+
+		    	while (node) {
+			      if (node.nodeType == 1 && node.tagName.toLowerCase() === 'button') {
+			        break;
+			      }
+			      node = node.parentNode;
+			    }
+					if (node) {
+						stopBubble(event);
+						idx = parseInt(node.parentNode.parentNode.id.split('-')[1]);
+						entries = JSON.parse(localStorage['slettubond']);
+						sliced = [];
+						if (idx > 0) sliced.push.apply(sliced, entries.slice(0, idx));
+						if (idx < entries.length - 1) sliced.push.apply(sliced, entries.slice(idx + 1));
+						localStorage['slettubond'] = JSON.stringify(sliced);
+						storageChanged();
+					}
+				}
+				
+				function firstChild(node) {
+					node = node.firstChild;
+					while (node && node.nodeType !== 1) {
+						node = node.nextSibling;
+					}
+					return node;
+				}
+				
+				function lastChild(node) {
+					node = node.lastChild;
+					while (node && node.nodeType !== 1) {
+						node = node.previousSibling;
+					}
+					return node;
+				}
+				
+			  var timer, readyQueue = [];
+
+				function ready(handler) {
+					if (document.loaded) return handler();
+					readyQueue.push(handler);
+				}
+
+				function fireContentLoadedEvent() {
+					if (document.loaded) return;
+					if (timer) clearTimeout(timer);
+					document.loaded = true;
+					for (var i = 0; i < readyQueue.length; i++) {
+						readyQueue[i].apply(this);
+					}
+				}
+
+			  function checkReadyState() {
+			    if (document.readyState === 'complete') {
+			      stopObserving(document, 'readystatechange', checkReadyState);
+			      fireContentLoadedEvent();
+			    }
+			  }
+
+			  function pollDoScroll() {
+			    try { document.documentElement.doScroll('left'); }
+			    catch(e) {
+			      timer = setTimeout(pollDoScroll, 10);
+			      return;
+			    }
+			    fireContentLoadedEvent();
+			  }
+
+			  if (document.addEventListener) {
+			    document.addEventListener('DOMContentLoaded', fireContentLoadedEvent, false);
+			  } else {
+			    observe(document, 'readystatechange', checkReadyState);
+			    if (window == top)
+			      timer = setTimeout(pollDoScroll, 10);
+			  }
+
+			  observe(window, 'load', fireContentLoadedEvent);
+								
+				function update() {
+					var input, output, pos, nextLF, lastSpace, line;
+					
+					input = $('input').value;
+					
+					nextLF = input.indexOf('\n');
+					line = 0;
+					output = '';
+					pos = 0;
+					while (nextLF > -1) {
+						line++;
+						lastSpace = input.substring(pos, nextLF).lastIndexOf(' ');
+						
+						if (line%2 === 1) {
+							if (lastSpace < 0) break;
+							lastSpace += pos;
+							output += input.substring(pos, lastSpace) + '\n' + input.substring(lastSpace + 1, nextLF) + ' ';
+							pos = nextLF + 1;
+						}
+												
+						nextLF = input.indexOf('\n', nextLF + 1);
+					}
+					output += input.substring(pos);
+					
+					output = output.split('\n').reverse();
+					for (line = 0; line < output.length; line++) {
+						output[line] = output[line].split(/\s+/).reverse().join(' ');
+					}
+					output = output.join('\n').replace(/[.,]/g, '').toLowerCase();
+					
+					$('output').value = output;
+				}
+				
+				ready(function() {
+					var btnStore;
+					
+					observe($('input'), 'keyup', update);
+					
+					btnStore = firstChild(lastChild($('output').parentNode));
+					$('stored').style.display = 'none';
+					if (canStore()) {
+						initLocalStore();
+						observe(btnStore, 'click', store);
+					} else {
+						btnStore.style.display = 'none';
+					}
+					observe(lastChild(lastChild($('output').parentNode)), 'click', function(event) {
+						stopBubble(event);
+						$('input').value = '';
+						$('output').value = '';
+					});
+					
+					observe(lastChild($('stored')), 'click', handleRemove);
+					
+					update();
+				});
+			})();
+		</script>
+		<style>
+			@import url(http://fonts.googleapis.com/css?family=Josefin+Sans:600|Alex+Brush);
+		
+			body {
+				font: 16px/1.231 'Josefin Sans',arial,helvetica,clean,sans-serif;
+				margin: 0;
+				background-repeat: repeat-x;
+				background-image: linear-gradient(top, #ccc 0, #fff 50%);
+				background-image: -o-linear-gradient(top, #ccc 0, #fff 50%);
+				background-image: -moz-linear-gradient(top, #ccc 0, #fff 50%);
+				background-image: -webkit-linear-gradient(top, #ccc 0, #fff 50%);
+				background-image: -ms-linear-gradient(top, #ccc 0, #fff 50%);
+			}
+			
+			#page {
+				width: 600px;
+				margin: 0 auto;
+			}
+		
+			header, section, footer {
+				display:block;
+			}
+			
+			footer {
+				border-top: 1px solid #000;
+			}
+			
+			h1, h2 {
+				font-family: 'Alex Brush', cursive;
+				font-weight: 400;
+				text-align: center;
+			}
+			
+			h1 {
+				color: #fff;
+        text-shadow: 3px 3px 5px #000;
+				font-size: 36px;
+			}
+			
+			h2 {
+				font-size: 24px;
+			}
+			
+			textarea {
+				margin-bottom: 10px;
+				font-family: inherit;
+				color: #000;
+				resize: none;
+				outline: 0;
+				background-color: #fff;
+				font-size: 26px;
+				width: 578px;
+				height: 4.5em;
+				padding: 10px;
+				border: none;
+		    -webkit-border-radius: 3px;
+		    border-radius: 3px;
+		    -webkit-box-shadow: inset 0px 1px 0px 0px #000;
+        box-shadow: inset 0px 1px 0px 0px #000;
+			}
+			
+			#stored ul {
+				margin: 0;
+				padding: 0;
+			}
+			
+			#stored li {
+				list-style-type: none;
+				border-bottom: 1px solid #000;
+				position: relative;
+			}
+			
+			#stored li:last-child {
+				border-bottom: none;
+			}
+			
+			#stored div {
+				position: absolute;
+				top: 0;
+				bottom: 0;
+				left: 250px;
+				right: 250px;
+				opacity: 0;
+				padding-top: 40px;
+				-webkit-transition: opacity .5s linear;
+				-moz-transition: opacity .5s linear;
+				-ms-transition: opacity .5s linear;
+				-o-transition: opacity .5s linear;
+				transition: opacity .5s linear;
+			}
+			
+			#stored div:hover {
+				opacity: 1;
+			}
+			
+			#stored p {
+				width: 290px;
+				font-size: 18px;
+				display: inline-block;
+			}
+			
+			#stored p:last-child {
+				margin-left: 20px;
+				text-align: right;
+			}
+			
+			/* For modern browsers */
+			.group:before,
+			.group:after {
+			    content:"";
+			    display:table;
+			}
+
+			.group:after {
+			    clear:both;
+			}
+
+			/* For IE 6/7 (trigger hasLayout) */
+			.group {
+			    *zoom:1;
+			}
+			
+			#actions {
+				text-align: right;
+				margin-top: 0;
+			}
+			
+			#actions button {
+				margin-left: 10px;
+			}
+			
+			/* Borrowed from http://hellohappy.org/css3-buttons/ */
+			button::-moz-focus-inner {
+			  border: 0; }
+			
+			button {
+			  background: #e3e3e3;
+			  border: 1px solid #bbb;
+			  -webkit-border-radius: 3px;
+			  -moz-border-radius: 3px;
+			  border-radius: 3px;
+			  -webkit-box-shadow: inset 0 0 1px 1px #f6f6f6;
+			  -moz-box-shadow: inset 0 0 1px 1px #f6f6f6;
+			  box-shadow: inset 0 0 1px 1px #f6f6f6;
+			  color: #333;
+			  font: bold 12px "helvetica neue", helvetica, arial, sans-serif;
+			  line-height: 1;
+			  padding: 8px 0 9px;
+			  text-align: center;
+			  text-shadow: 0 1px 0 #fff;
+			  width: 100px; }
+			  button:hover {
+			    background: #d9d9d9;
+			    -webkit-box-shadow: inset 0 0 1px 1px #eaeaea;
+			    -moz-box-shadow: inset 0 0 1px 1px #eaeaea;
+			    box-shadow: inset 0 0 1px 1px #eaeaea;
+			    color: #222;
+			    cursor: pointer; }
+			  button:active {
+			    background: #d0d0d0;
+			    -webkit-box-shadow: inset 0 0 1px 1px #e3e3e3;
+			    -moz-box-shadow: inset 0 0 1px 1px #e3e3e3;
+			    box-shadow: inset 0 0 1px 1px #e3e3e3;
+			    color: #000; }
+		</style>
+	</head>
+	<body>
+		<div id="page">
+			<header>
+				<h1>Sléttubönd</h1>
+			</header>
+			<section>
+				<textarea id="input">Ungu fólki hefur hann
+hygginn þroska gefið.
+Tungu enska kenna kann,
+karlinn fyllir nefið.</textarea>
+				<textarea id="output"></textarea>
+				<p id="actions"><button>Geyma</button><button>Hreinsa</button></p>
+			</section>
+			<section id="stored">
+				<h2>Geymd bönd</h2>
+				<ul>
+					<li>Engin bönd komin ennþá</li>
+				</ul>
+			</section>
+			<footer>
+				<p>&copy; Árni Einarsson 2012</p>
+			</footer>
+		</div>
+	</body>
+</html>
